@@ -1,250 +1,125 @@
+"""👔 HR ANALYTICS - EMPLOYEE RETENTION DASHBOARD"""
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-from src.retention import attrition_by_department, performance_by_department, tenure_analysis
-from src.performance import performance_distribution, salary_analysis, top_performers, identify_at_risk
+import plotly.express as px
+import numpy as np
 
-st.set_page_config(page_title="HR Analytics", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="HR Analytics", layout="wide")
 
-st.markdown("""
-    <style>
-    .header {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-        padding: 20px;
-        border-radius: 10px;
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+C1, C2, C3, C4 = "#1a237e", "#00d9ff", "#ff5722", "#4caf50"
 
-# Load data
-df = pd.read_csv('data/employee_data.csv')
+st.markdown(f"""<style>
+.header {{background: linear-gradient(135deg, {C1} 0%, {C2} 100%); padding: 40px; border-radius: 15px; color: white; margin-bottom: 30px;}}
+.risk-high {{background: #ffebee; border-left: 5px solid #d32f2f; padding: 15px; border-radius: 8px; margin: 8px 0;}}
+.risk-medium {{background: #fff3e0; border-left: 5px solid #f57c00; padding: 15px; border-radius: 8px; margin: 8px 0;}}
+.risk-low {{background: #e8f5e9; border-left: 5px solid #388e3c; padding: 15px; border-radius: 8px; margin: 8px 0;}}
+.kpi-box {{background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); padding: 30px; border-radius: 12px; color: white; text-align: center; margin: 10px 0;}}
+</style>""", unsafe_allow_html=True)
 
-if df is not None and len(df) > 0:
-    st.markdown('<div class="header"><h1>👥 HR Analytics & Employee Retention Dashboard</h1></div>', 
-                unsafe_allow_html=True)
+@st.cache_data
+def load_data():
+    df = pd.read_csv('data/employee_data.csv')
+    df['risk_score'] = (
+        (df['performance_rating'] <= 2.5) * 40 +
+        (df['tenure_years'] <= 1) * 30 +
+        (df['salary'] < df['salary'].median()) * 20 +
+        (df['status'] == 'Exited') * 50
+    )
+    return df
+
+df = load_data()
+st.markdown(f'<div class="header"><h1>👥 HR Risk Assessment Dashboard</h1><p>Employee Retention Intelligence & Churn Prevention</p></div>', unsafe_allow_html=True)
+
+# KPIs
+total_emp = len(df)
+at_risk = len(df[df['risk_score'] >= 60])
+high_performers = len(df[(df['performance_rating'] >= 4) & (df['status'] == 'Active')])
+churn_rate = len(df[df['status'] == 'Exited']) / total_emp * 100
+
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.markdown(f'<div class="kpi-box"><p>⚠️ AT-RISK EMPLOYEES</p><h2>{at_risk}</h2><p>{at_risk/total_emp*100:.1f}% of workforce</p></div>', unsafe_allow_html=True)
+with col2:
+    st.markdown(f'<div class="kpi-box"><p>⭐ RETENTION STARS</p><h2>{high_performers}</h2><p>{high_performers/total_emp*100:.1f}% of workforce</p></div>', unsafe_allow_html=True)
+with col3:
+    st.markdown(f'<div class="kpi-box"><p>📊 ATTRITION RATE</p><h2>{churn_rate:.1f}%</h2><p>{len(df[df["status"]=="Exited"])} employees exited</p></div>', unsafe_allow_html=True)
+with col4:
+    st.markdown(f'<div class="kpi-box"><p>📈 AVG TENURE</p><h2>{df["tenure_years"].mean():.1f} yrs</h2><p>Avg across company</p></div>', unsafe_allow_html=True)
+
+st.divider()
+
+# MAIN SECTION: EMPLOYEE RISK TABLE
+st.subheader("🚨 EMPLOYEE RISK ASSESSMENT TABLE")
+risk_df = df[['employee_id', 'job_title', 'department', 'salary', 'tenure_years', 'performance_rating', 'status', 'risk_score']].copy()
+risk_df = risk_df.sort_values('risk_score', ascending=False)
+
+st.dataframe(
+    risk_df.style.applymap(
+        lambda x: 'background-color: #ffcdd2' if isinstance(x, (int, float)) and x >= 60 else ('background-color: #fff9c4' if isinstance(x, (int, float)) and x >= 40 else ''),
+        subset=['risk_score']
+    ),
+    use_container_width=True,
+    hide_index=True
+)
+
+st.divider()
+
+# VISUALIZATIONS
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("📍 Risk Distribution by Department")
+    dept_risk = df.groupby('department')['risk_score'].mean().sort_values(ascending=False)
+    fig = px.bar(
+        x=dept_risk.index,
+        y=dept_risk.values,
+        color=dept_risk.values,
+        color_continuous_scale='Reds',
+        labels={'y': 'Average Risk Score', 'x': 'Department'},
+        title="Average Employee Risk by Department"
+    )
+    fig.update_layout(height=400, plot_bgcolor='rgba(0,0,0,.05)')
+    st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    st.subheader("💰 Tenure vs Salary (colored by Risk)")
+    fig = px.scatter(
+        df,
+        x='tenure_years',
+        y='salary',
+        color='risk_score',
+        size='performance_rating',
+        hover_name='employee_id',
+        color_continuous_scale='RdYlGn_r',
+        labels={'tenure_years': 'Tenure (Years)', 'salary': 'Salary ($)', 'risk_score': 'Risk Score'},
+        title="Tenure vs Salary Analysis"
+    )
+    fig.update_layout(height=400, plot_bgcolor='rgba(0,0,0,.05)')
+    st.plotly_chart(fig, use_container_width=True)
+
+st.divider()
+
+# HIGH RISK EMPLOYEES
+st.subheader("⛔ HIGHEST RISK EMPLOYEES (Action Required)")
+high_risk = df[df['risk_score'] >= 60].sort_values('risk_score', ascending=False).head(10)
+
+for idx, row in high_risk.iterrows():
+    if row['risk_score'] >= 80:
+        risk_class = "risk-high"
+        emoji = "🔴"
+    elif row['risk_score'] >= 60:
+        risk_class = "risk-medium"
+        emoji = "🟠"
+    else:
+        risk_class = "risk-low"
+        emoji = "🟡"
     
-    # Calculate metrics
-    total_employees = len(df)
-    attrition_count = df['attrition'].sum()
-    attrition_rate = (attrition_count / total_employees * 100)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Employees", total_employees)
-    with col2:
-        st.metric("Attrition Rate", f"{attrition_rate:.1f}%", delta=f"{int(attrition_count)} left")
-    with col3:
-        st.metric("Avg Salary", f"${df['salary'].mean():,.0f}")
-    with col4:
-        st.metric("Avg Performance", f"{df['performance_rating'].mean():.2f}/5.0")
-    
-    st.divider()
-    
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "👨‍💼 Performance", "🚪 Attrition", "💰 Compensation", "⚠️ At-Risk"])
-    
-    # TAB 1: OVERVIEW
-    with tab1:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Employee Distribution by Department (Pie)")
-            dept_dist = df['department'].value_counts()
-            fig_dept = px.pie(values=dept_dist.values, names=dept_dist.index,
-                            title="Employee Count by Department",
-                            color_discrete_sequence=px.colors.qualitative.Set3)
-            st.plotly_chart(fig_dept, use_container_width=True)
-        
-        with col2:
-            st.subheader("Employee Distribution by Role (Pie)")
-            role_dist = df['job_role'].value_counts()
-            fig_role = px.pie(values=role_dist.values, names=role_dist.index,
-                            title="Employee Count by Job Role")
-            st.plotly_chart(fig_role, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Tenure Distribution (Histogram)")
-            fig_tenure = px.histogram(df, x='years_at_company', nbins=8,
-                                    title="Tenure Distribution",
-                                    labels={'years_at_company': 'Years at Company'},
-                                    color_discrete_sequence=['#fa709a'])
-            st.plotly_chart(fig_tenure, use_container_width=True)
-        
-        with col2:
-            st.subheader("Performance Rating Distribution (Histogram)")
-            fig_perf_dist = px.histogram(df, x='performance_rating', nbins=5,
-                                        title="Performance Rating Distribution",
-                                        color_discrete_sequence=['#fee140'])
-            st.plotly_chart(fig_perf_dist, use_container_width=True)
-    
-    # TAB 2: PERFORMANCE
-    with tab2:
-        perf_dept = performance_by_department(df)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Avg Performance by Department (Bar)")
-            fig_perf_dept = px.bar(x=perf_dept.index, y=perf_dept['performance_rating'],
-                                  title="Average Performance Rating by Department",
-                                  labels={'performance_rating': 'Avg Rating'},
-                                  color=perf_dept['performance_rating'],
-                                  color_continuous_scale='RdYlGn')
-            st.plotly_chart(fig_perf_dept, use_container_width=True)
-        
-        with col2:
-            st.subheader("Top Performers (Bar)")
-            top_perf = top_performers(df, n=5)
-            fig_top = px.bar(data_frame=top_perf, x='employee_id', y='performance_rating',
-                           title="Top 5 Performers",
-                           labels={'performance_rating': 'Rating'},
-                           color='performance_rating',
-                           color_continuous_scale='Greens')
-            st.plotly_chart(fig_top, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Performance vs Tenure (Scatter)")
-            fig_perf_tenure = px.scatter(df, x='years_at_company', y='performance_rating',
-                                        color='department', size='salary',
-                                        title="Performance Rating vs Years at Company",
-                                        hover_name='employee_id')
-            st.plotly_chart(fig_perf_tenure, use_container_width=True)
-        
-        with col2:
-            st.subheader("Top Performers Table")
-            st.dataframe(top_perf, use_container_width=True, hide_index=True)
-    
-    # TAB 3: ATTRITION
-    with tab3:
-        attrition_dept = attrition_by_department(df)
-        attrition_dept['attrition_rate'] = (attrition_dept['left_company'] / attrition_dept['total_employees'] * 100).round(1)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Attrition Rate by Department (Bar)")
-            fig_attr_rate = px.bar(x=attrition_dept.index, y=attrition_dept['attrition_rate'],
-                                  title="Attrition Rate % by Department",
-                                  labels={'attrition_rate': 'Attrition Rate (%)'},
-                                  color=attrition_dept['attrition_rate'],
-                                  color_continuous_scale='Reds')
-            st.plotly_chart(fig_attr_rate, use_container_width=True)
-        
-        with col2:
-            st.subheader("Left vs Stayed by Department")
-            dept_status = pd.crosstab(df['department'], df['attrition'])
-            fig_status = px.bar(dept_status, barmode='group',
-                              title="Employee Status by Department",
-                              labels={0: 'Active', 1: 'Left'},
-                              color_discrete_map={0: '#2ecc71', 1: '#e74c3c'})
-            st.plotly_chart(fig_status, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Tenure vs Attrition Risk (Heatmap)")
-            df_copy = df.copy()
-            df_copy['tenure_bucket'] = pd.cut(df_copy['years_at_company'], 
-                                             bins=[0, 1, 3, 5, 10, 30],
-                                             labels=['<1yr', '1-3yr', '3-5yr', '5-10yr', '10+yr'])
-            tenure_attr = pd.crosstab(df_copy['tenure_bucket'], df_copy['attrition'])
-            fig_tenure_heat = px.imshow(tenure_attr.T, labels=dict(x="Tenure", y="Status"),
-                                       title="Attrition Heatmap by Tenure",
-                                       color_continuous_scale='RdYlGn_r')
-            st.plotly_chart(fig_tenure_heat, use_container_width=True)
-        
-        with col2:
-            st.subheader("Attrition Summary Table")
-            st.dataframe(attrition_dept, use_container_width=True, hide_index=True)
-    
-    # TAB 4: COMPENSATION
-    with tab4:
-        st.subheader("Salary Analysis")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Average Salary by Department (Bar)")
-            dept_salary = df.groupby('department')['salary'].mean().sort_values(ascending=False)
-            fig_dept_sal = px.bar(x=dept_salary.index, y=dept_salary.values,
-                                 title="Average Salary by Department",
-                                 labels={'y': 'Avg Salary ($)'},
-                                 color=dept_salary.values,
-                                 color_continuous_scale='Blues')
-            st.plotly_chart(fig_dept_sal, use_container_width=True)
-        
-        with col2:
-            st.subheader("Salary Distribution Box Plot")
-            fig_salary_box = px.box(df, x='department', y='salary',
-                                   color='department',
-                                   title="Salary Distribution by Department")
-            st.plotly_chart(fig_salary_box, use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Salary vs Performance (Scatter)")
-            fig_sal_perf = px.scatter(df, x='performance_rating', y='salary',
-                                     color='department', size='years_at_company',
-                                     title="Salary vs Performance Rating",
-                                     hover_name='employee_id')
-            st.plotly_chart(fig_sal_perf, use_container_width=True)
-        
-        with col2:
-            st.subheader("Avg Salary by Job Role (Bar)")
-            role_salary = df.groupby('job_role')['salary'].mean().sort_values(ascending=False)
-            fig_role_sal = px.bar(x=role_salary.index, y=role_salary.values,
-                                 title="Average Salary by Job Role",
-                                 labels={'y': 'Avg Salary ($)'},
-                                 color=role_salary.values,
-                                 color_continuous_scale='Viridis')
-            st.plotly_chart(fig_role_sal, use_container_width=True)
-    
-    # TAB 5: AT-RISK EMPLOYEES
-    with tab5:
-        st.subheader("⚠️ At-Risk Employee Analysis")
-        
-        at_risk = identify_at_risk(df)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader(f"At-Risk Employees: {len(at_risk)}")
-            if len(at_risk) > 0:
-                fig_at_risk = px.scatter(at_risk.reset_index(), x='years_at_company', 
-                                        y='performance_rating',
-                                        color='department', size='employee_id',
-                                        title="At-Risk Employee Profile",
-                                        hover_name='employee_id')
-                st.plotly_chart(fig_at_risk, use_container_width=True)
-            else:
-                st.success("✅ No at-risk employees detected!")
-        
-        with col2:
-            st.subheader("Performance vs Tenure (All Employees)")
-            fig_all = px.scatter(df, x='years_at_company', y='performance_rating',
-                               color='attrition', size='salary',
-                               title="All Employees: High Risk Areas",
-                               hover_name='employee_id',
-                               color_discrete_map={0: '#2ecc71', 1: '#e74c3c'})
-            st.plotly_chart(fig_all, use_container_width=True)
-        
-        if len(at_risk) > 0:
-            st.subheader("At-Risk Employees List")
-            st.dataframe(at_risk, use_container_width=True, hide_index=True)
-        
-        csv = at_risk.to_csv(index=False) if len(at_risk) > 0 else ""
-        if len(at_risk) > 0:
-            st.download_button(
-                label="📥 Download At-Risk Report",
-                data=csv,
-                file_name="at_risk_employees.csv",
-                mime="text/csv"
-            )
-else:
-    st.error("Unable to load data.")
+    st.markdown(f"""<div class="{risk_class}">
+    <strong>{emoji} {row['employee_id']} | {row['job_title']} | {row['department']}</strong><br/>
+    Risk Score: {row['risk_score']:.0f} | Tenure: {row['tenure_years']:.1f} yrs | Performance: {row['performance_rating']:.1f}/5 | Salary: ${row['salary']:,.0f}
+    </div>""", unsafe_allow_html=True)
+
+st.divider()
+csv = risk_df.to_csv(index=False)
+st.download_button("📥 Download Employee Risk Report", csv, "hr_risk_report.csv", "text/csv")
