@@ -37,4 +37,5 @@ python main.py
 - Salary Distribution
 
 ## Author
-Data Analyst Portfolio
+Nashrah Khan
+
