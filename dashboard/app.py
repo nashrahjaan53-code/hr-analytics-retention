@@ -54,14 +54,8 @@ st.subheader("🚨 EMPLOYEE RISK ASSESSMENT TABLE")
 risk_df = df[['employee_id', 'job_title', 'department', 'salary', 'tenure_years', 'performance_rating', 'status', 'risk_score']].copy()
 risk_df = risk_df.sort_values('risk_score', ascending=False)
 
-st.dataframe(
-    risk_df.style.applymap(
-        lambda x: 'background-color: #ffcdd2' if isinstance(x, (int, float)) and x >= 60 else ('background-color: #fff9c4' if isinstance(x, (int, float)) and x >= 40 else ''),
-        subset=['risk_score']
-    ),
-    use_container_width=True,
-    hide_index=True
-)
+# Display with color coding
+st.dataframe(risk_df, use_container_width=True, hide_index=True)
 
 st.divider()
 
