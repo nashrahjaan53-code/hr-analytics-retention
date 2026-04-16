@@ -1,0 +1,21 @@
+employee_id,department,job_role,salary,performance_rating,years_at_company,attrition
+E001,Sales,Sales Rep,45000,3.5,2,0
+E002,Sales,Sales Manager,65000,4.2,5,0
+E003,IT,Developer,75000,4.5,3,0
+E004,IT,IT Manager,90000,4.0,7,0
+E005,HR,HR Specialist,55000,3.8,2,0
+E006,Sales,Sales Rep,48000,2.8,4,1
+E007,IT,Developer,72000,4.3,1,0
+E008,Marketing,Analyst,52000,3.9,3,0
+E009,Sales,Sales Rep,46000,3.2,6,1
+E010,IT,Developer,76000,4.6,2,0
+E011,HR,HR Specialist,56000,4.1,1,0
+E012,Marketing,Manager,70000,4.4,4,0
+E013,Sales,Sales Rep,47000,2.5,8,1
+E014,IT,DevOps,80000,4.0,3,0
+E015,Marketing,Analyst,51000,3.6,2,0
+E016,HR,Manager,75000,4.3,6,0
+E017,Sales,Account Exec,62000,4.1,2,0
+E018,IT,Developer,74000,3.9,4,0
+E019,Marketing,Analyst,53000,4.2,1,0
+E020,Sales,Sales Rep,45000,2.9,5,1
